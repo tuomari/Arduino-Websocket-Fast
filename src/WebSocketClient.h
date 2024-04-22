@@ -89,28 +89,34 @@ http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-75
 class WebSocketClient {
 public:
 
+
     // Handle connection requests to validate and process/refuse
     // connections.
-    bool handshake(Client &client, bool socketio = false);
+    bool handshake(Client &client, bool socketio = false, const char * additionalHeaders = nullptr);
 
     // Get data off of the stream
     bool getData(String& data, uint8_t *opcode = NULL);
-    bool getData(char *data, uint8_t *opcode = NULL);
+    bool getData(uint8_t *data, size_t max_size, uint8_t *opcode = NULL);
+    //void getData(const uint8_t * data, size_t maxLength, uint8_t *opcode = NULL);
 
     // Write data to the stream
     void sendData(const char *str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
     void sendData(String str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
+    void sendData(const uint8_t * data, size_t length, uint8_t opcode = WS_OPCODE_BINARY );
 
-    bool issocketio;
-    char *path;
-    char *host;
-    char *protocol;
+    bool hasReadableBytes() { return socket_client.available() > 0}
+
+    bool issocketio = false;
+    char *path = nullptr;
+    char *host = nullptr;;
+    char *protocol = nullptr;;
 
 private:
     Client *socket_client;
     // socket.io session id
     char sid[32];
     unsigned long _startMillis;
+    const char * _additionalHeaders = nullptr;
 
     const char *socket_urlPrefix;
 

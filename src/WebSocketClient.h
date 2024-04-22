@@ -49,6 +49,8 @@ http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-75
 #include <Stream.h>
 #include "String.h"
 #include "Client.h"
+#include <ArduinoLog.h>
+
 
 // CRLF characters to terminate lines/handshakes in headers.
 #define CRLF "\r\n"
@@ -73,50 +75,53 @@ http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-75
 
 // WebSocket protocol constants
 // First byte
-#define WS_FIN            0x80
-#define WS_OPCODE_TEXT    0x01
-#define WS_OPCODE_BINARY  0x02
-#define WS_OPCODE_CLOSE   0x08
-#define WS_OPCODE_PING    0x09
-#define WS_OPCODE_PONG    0x0a
+#define WS_FIN 0x80
+#define WS_OPCODE_TEXT 0x01
+#define WS_OPCODE_BINARY 0x02
+#define WS_OPCODE_CLOSE 0x08
+#define WS_OPCODE_PING 0x09
+#define WS_OPCODE_PONG 0x0a
 // Second byte
-#define WS_MASK           0x80
-//#define WS_MASK           0x00
-#define WS_SIZE16         126
-#define WS_SIZE64         127
+#define WS_MASK 0x80
+// #define WS_MASK           0x00
+#define WS_SIZE16 126
+#define WS_SIZE64 127
 
-
-class WebSocketClient {
+class WebSocketClient
+{
 public:
-
+    WebSocketClient(Client *client, bool socketio = false)
+        : socket_client(client), issocketio(socketio) {}
 
     // Handle connection requests to validate and process/refuse
     // connections.
-    bool handshake(Client &client, bool socketio = false, const char * additionalHeaders = nullptr);
+    bool handshake(const char *additionalHeaders = nullptr);
 
     // Get data off of the stream
-    bool getData(String& data, uint8_t *opcode = NULL);
+    bool getData(String &data, uint8_t *opcode = NULL);
     bool getData(uint8_t *data, size_t max_size, uint8_t *opcode = NULL);
-    //void getData(const uint8_t * data, size_t maxLength, uint8_t *opcode = NULL);
+    // void getData(const uint8_t * data, size_t maxLength, uint8_t *opcode = NULL);
 
     // Write data to the stream
     void sendData(const char *str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
     void sendData(String str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
-    void sendData(const uint8_t * data, size_t length, uint8_t opcode = WS_OPCODE_BINARY );
+    void sendData(const uint8_t *data, const size_t data_length, uint8_t opcode = WS_OPCODE_BINARY,  uint16_t msg_cmd = 0xffff);
 
-    bool hasReadableBytes() { return socket_client.available() > 0}
+    bool hasReadableBytes() { return socket_client->available() > 0; }
 
-    bool issocketio = false;
+    const bool issocketio;
     char *path = nullptr;
-    char *host = nullptr;;
-    char *protocol = nullptr;;
+    char *host = nullptr;
+    ;
+    char *protocol = nullptr;
+    ;
 
 private:
     Client *socket_client;
     // socket.io session id
     char sid[32];
     unsigned long _startMillis;
-    const char * _additionalHeaders = nullptr;
+    char *_additionalHeaders = nullptr;
 
     const char *socket_urlPrefix;
 
@@ -124,8 +129,9 @@ private:
     // websocket connection.
     bool analyzeRequest();
 
-    bool handleStream(String& data, uint8_t *opcode);
+    bool handleStream(String &data, uint8_t *opcode);
     bool handleStream(char *data, uint8_t *opcode);
+    bool handleStream(uint8_t *data, size_t data_size, uint8_t *opcode);
 
     // Disconnect user gracefully.
     void disconnectStream();
@@ -138,7 +144,5 @@ private:
     void sendEncodedDataFast(char *str, uint8_t opcode);
     void sendEncodedDataFast(String str, uint8_t opcode);
 };
-
-
 
 #endif

@@ -5,11 +5,14 @@
 
 #include "sha1.h"
 #include "base64.h"
+#include <ArduinoLog.h>
 
-bool WebSocketClient::handshake(const char *additionalHeaders)
+bool WebSocketClient::handshake(const char* path, const char *additionalHeaders, const char* protocol )
 {
+    _path = path;
+    _protocol = protocol;
 
-    additionalHeaders = additionalHeaders;
+    _additionalHeaders = additionalHeaders;
     strcpy(sid, "");
 
     // If there is a connected client->
@@ -45,6 +48,7 @@ bool WebSocketClient::handshake(const char *additionalHeaders)
     }
     else
     {
+        Serial.println(F("Socket not connected."));
         return false;
     }
 }
@@ -69,7 +73,7 @@ bool WebSocketClient::analyzeRequest()
         Serial.println(F("Sending websocket upgrade headers"));
 #endif
 
-        randomSeed(analogRead(0));
+        //randomSeed(analogRead(0));
 
         for (int i = 0; i < 16; ++i)
         {
@@ -84,7 +88,7 @@ bool WebSocketClient::analyzeRequest()
         }
 
         socket_client->print(F("GET "));
-        socket_client->print(path);
+        socket_client->print(_path);
         if (issocketio)
         {
             socket_client->print(F("socket.io/?EIO=3&transport=websocket&sid="));
@@ -96,9 +100,12 @@ bool WebSocketClient::analyzeRequest()
         socket_client->print(F("Sec-WebSocket-Key: "));
         socket_client->print(key);
         socket_client->print(CRLF);
-        socket_client->print(F("Sec-WebSocket-Protocol: "));
-        socket_client->print(protocol);
-        socket_client->print(CRLF);
+        if (_protocol != nullptr)
+        {
+            socket_client->print(F("Sec-WebSocket-Protocol: "));
+            socket_client->print(_protocol);
+            socket_client->print(CRLF);
+        }
         socket_client->print(F("Sec-WebSocket-Version: 13\r\n"));
     }
     else
@@ -109,15 +116,16 @@ bool WebSocketClient::analyzeRequest()
 #endif
 
         socket_client->print(F("GET "));
-        socket_client->print(path);
+        socket_client->print(_path);
         socket_client->print(F("socket.io/?EIO=3&transport=polling HTTP/1.1\r\n"));
         socket_client->print(F("Connection: keep-alive\r\n"));
     }
 
     socket_client->print(F("Host: "));
-    socket_client->print(host);
-    if (_additionalHeaders != nullptr)
+    socket_client->print(_host);
+    if (_additionalHeaders != nullptr && strlen(_additionalHeaders) > 0)
     {
+        socket_client->print(CRLF);
         socket_client->print(_additionalHeaders);
     }
 
@@ -351,7 +359,7 @@ bool readShort(Client *socket_client, uint16_t *out)
 //   |                     Payload Data continued ...                |
 //   +---------------------------------------------------------------+
 
-bool WebSocketClient::handleStream(uint8_t *data, size_t data_size, uint8_t *opcode)
+bool WebSocketClient::handleStream(uint8_t *data, size_t *data_size, uint8_t *opcode)
 {
 
     uint8_t headers[2];
@@ -394,7 +402,7 @@ bool WebSocketClient::handleStream(uint8_t *data, size_t data_size, uint8_t *opc
         }
     }
 
-    if (length > data_size)
+    if (length > *data_size)
     {
         Log.errorln("Got websocket message of length %i, but data size is only %i", length, data_size);
         return false;
@@ -411,6 +419,7 @@ bool WebSocketClient::handleStream(uint8_t *data, size_t data_size, uint8_t *opc
             data[i] = data[i] ^ mask[i % 4];
         }
     }
+    *data_size = length;
 
     return true;
 }
@@ -435,7 +444,7 @@ bool WebSocketClient::getData(String &data, uint8_t *opcode)
     return handleStream(data, opcode);
 }
 
-bool WebSocketClient::getData(uint8_t *data, size_t data_size, uint8_t *opcode)
+bool WebSocketClient::getData(uint8_t *data, size_t *data_size, uint8_t *opcode)
 {
     return handleStream(data, data_size, opcode);
 }
@@ -604,7 +613,7 @@ void WebSocketClient::sendEncodedDataFast(char *str, uint8_t opcode)
     socket_client->write((uint8_t *)buf, size_buf);
 }
 
-void WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint8_t opcode, uint16_t msg_cmd = 0xffff)
+void WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint8_t opcode, uint16_t msg_cmd)
 {
     int size = data_size;
     // Hack to allow sending the protocol cmd prefix with actual ata
@@ -614,7 +623,7 @@ void WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint
     }
 
     int total_msg_size = size + 2;
-    
+
     if (size > 125)
     {
         total_msg_size += 2;
@@ -624,7 +633,6 @@ void WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint
     {
         total_msg_size += 4;
     }
-
 
     // TODO: get MTU from client
     const int buf_size = min(90, total_msg_size);
@@ -648,7 +656,7 @@ void WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint
     }
 
     uint8_t mask[4];
-    for (int i = 0; i < 4; +i)
+    for (int i = 0; i < 4; ++i)
     {
         mask[i] = random(0, 256);
         buf[bufPos++] = mask[i];
@@ -667,8 +675,8 @@ void WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint
         assert(bufPos <= buf_size);
         if (bufPos == buf_size)
         {
-            Log.traceln(F("Flushing %i bytes from websocket buffer to socket"), buf_size);
-            socket_client->write(buf, buf_size);
+            size_t written = socket_client->write(buf, buf_size);
+            //Log.traceln(F("Flushed %i bytes from websocket buffer to socket. response %i"), buf_size, written);
             bufPos = 0;
         }
 

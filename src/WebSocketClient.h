@@ -98,6 +98,12 @@ public:
         return socket_client->connect(host, port);
     }
 
+    void stop()
+    {
+        disconnectStream();
+    }
+
+    
     // Handle connection requests to validate and process/refuse
     // connections.
     bool handshake(const char* path, const char *additionalHeaders = nullptr, const char* protocol = nullptr);
@@ -114,9 +120,6 @@ public:
 
     bool hasReadableBytes() { return socket_client->available() > 0; }
 
-    const bool issocketio;
-
-    ;
 
 private:
     Client *socket_client;
@@ -125,6 +128,8 @@ private:
     const char *_path = nullptr;
     const char *_protocol = nullptr;
     const char *_additionalHeaders = nullptr;
+
+    const bool issocketio;
 
     // socket.io session id
     char sid[32];

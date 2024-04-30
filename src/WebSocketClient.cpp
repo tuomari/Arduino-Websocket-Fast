@@ -1,4 +1,4 @@
-//#define DEBUGGING
+// #define DEBUGGING
 
 #include "global.h"
 #include "WebSocketClient.h"
@@ -634,6 +634,7 @@ void WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint
         total_msg_size += 4;
     }
 
+    uint8_t buf[size_buf];
     // TODO: get MTU from client
     const int buf_size = min(90, total_msg_size);
 

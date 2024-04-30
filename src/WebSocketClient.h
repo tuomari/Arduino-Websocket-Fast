@@ -121,7 +121,11 @@ public:
     bool hasReadableBytes() { return socket_client->available() > 0; }
 
 
+    char *protocol = nullptr;
+   
 private:
+
+
     Client *socket_client;
     const char *_host = nullptr;
     uint16_t _port;

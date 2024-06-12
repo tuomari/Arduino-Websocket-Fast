@@ -153,7 +153,12 @@ bool WebSocketClient::analyzeRequest()
 #ifdef DEBUGGING
             Serial.print("Got Header: " + temp);
 #endif
-            if (!foundupgrade && temp.startsWith("Upgrade: websocket"))
+            if (temp.equals("\r\n"))
+            {
+                // Received empty line, ie end of headers.
+                break;
+            }
+            else if (!foundupgrade && temp.startsWith("Upgrade: websocket"))
             {
                 foundupgrade = true;
             }

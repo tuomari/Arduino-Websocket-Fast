@@ -454,171 +454,8 @@ bool WebSocketClient::getData(uint8_t *data, size_t *data_size, uint8_t *opcode)
     return handleStream(data, data_size, opcode);
 }
 
-void WebSocketClient::sendData(const char *str, uint8_t opcode, bool fast)
-{
-#ifdef DEBUGGING
-    Serial.print(F("Sending data: "));
-    Serial.println(str);
-#endif
-    if (socket_client->connected())
-    {
-        if (fast)
-        {
-            sendEncodedDataFast(str, opcode);
-        }
-        else
-        {
-            sendEncodedData(str, opcode);
-        }
-    }
-}
 
-void WebSocketClient::sendData(String str, uint8_t opcode, bool fast)
-{
-#ifdef DEBUGGING
-    Serial.print(F("Sending data: "));
-    Serial.println(str);
-#endif
-    if (socket_client->connected())
-    {
-        if (fast)
-        {
-            sendEncodedDataFast(str, opcode);
-        }
-        else
-        {
-            sendEncodedData(str, opcode);
-        }
-    }
-}
-
-int WebSocketClient::timedRead()
-{
-    yield();
-    for (int i = 0; i < 5000 && !socket_client->available(); ++i)
-    {
-        delay(1);
-    }
-    return socket_client->read();
-}
-
-void WebSocketClient::sendEncodedData(char *str, uint8_t opcode)
-{
-    uint8_t mask[4];
-    int size = strlen(str);
-
-    // Opcode; final fragment
-    socket_client->write(opcode | WS_FIN);
-
-    // NOTE: no support for > 16-bit sized messages
-    if (size > 125)
-    {
-        socket_client->write(WS_SIZE16 | WS_MASK);
-        socket_client->write((uint8_t)(size >> 8));
-        socket_client->write((uint8_t)(size & 0xFF));
-    }
-    else
-    {
-        socket_client->write((uint8_t)size | WS_MASK);
-    }
-
-    if (WS_MASK > 0)
-    {
-        // Serial.println("MASK");
-        mask[0] = random(0, 256);
-        mask[1] = random(0, 256);
-        mask[2] = random(0, 256);
-        mask[3] = random(0, 256);
-
-        socket_client->write(mask[0]);
-        socket_client->write(mask[1]);
-        socket_client->write(mask[2]);
-        socket_client->write(mask[3]);
-    }
-
-    for (int i = 0; i < size; ++i)
-    {
-        if (WS_MASK > 0)
-        {
-            // Serial.println("send with MASK");
-            // delay(20);
-            socket_client->write(str[i] ^ mask[i % 4]);
-        }
-        else
-        {
-            socket_client->write(str[i]);
-        }
-    }
-}
-
-void WebSocketClient::sendEncodedDataFast(char *str, uint8_t opcode)
-{
-    uint8_t mask[4];
-    int size = strlen(str);
-    int size_buf = size + 1;
-    if (size > 125)
-    {
-        size_buf += 3;
-    }
-    else
-    {
-        size_buf += 1;
-    }
-    if (WS_MASK > 0)
-    {
-        size_buf += 4;
-    }
-
-    char buf[size_buf];
-    char tmp[2];
-
-    // Opcode; final fragment
-    sprintf(tmp, "%c", (char)(opcode | WS_FIN));
-    strcpy(buf, tmp);
-
-    // NOTE: no support for > 16-bit sized messages
-    if (size > 125)
-    {
-        sprintf(tmp, "%c", (char)(WS_SIZE16 | WS_MASK));
-        strcat(buf, tmp);
-        sprintf(tmp, "%c", (char)(size >> 8));
-        strcat(buf, tmp);
-        sprintf(tmp, "%c", (char)(size & 0xFF));
-        strcat(buf, tmp);
-    }
-    else
-    {
-        sprintf(tmp, "%c", (char)size | WS_MASK);
-        strcat(buf, tmp);
-    }
-
-    if (WS_MASK > 0)
-    {
-        mask[0] = random(0, 256);
-        mask[1] = random(0, 256);
-        mask[2] = random(0, 256);
-        mask[3] = random(0, 256);
-
-        sprintf(tmp, "%c", (char)mask[0]);
-        strcat(buf, tmp);
-        sprintf(tmp, "%c", (char)mask[1]);
-        strcat(buf, tmp);
-        sprintf(tmp, "%c", (char)mask[2]);
-        strcat(buf, tmp);
-        sprintf(tmp, "%c", (char)mask[3]);
-        strcat(buf, tmp);
-
-        for (int i = 0; i < size; ++i)
-        {
-            str[i] = str[i] ^ mask[i % 4];
-        }
-    }
-
-    strcat(buf, str);
-    socket_client->write((uint8_t *)buf, size_buf);
-}
-
-void WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint8_t opcode, uint16_t msg_cmd)
+bool WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint8_t opcode, uint16_t msg_cmd)
 {
     int size = data_size;
     // Hack to allow sending the protocol cmd prefix with actual ata
@@ -675,38 +512,35 @@ void WebSocketClient::sendData(const uint8_t *data, const size_t data_size, uint
         buf[bufPos++] = (msg_cmd & 0xFF) ^ mask[maskPtr++ % 4];
     }
 
+    bool middleFlush = false;
     for (int i = 0; i < data_size; ++i)
     {
         assert(bufPos <= buf_size);
         if (bufPos == buf_size)
         {
             size_t written = socket_client->write(buf, buf_size);
-            //Log.traceln(F("Flushed %i bytes from websocket buffer to socket. response %i"), buf_size, written);
+            Log.trace(F("%i/%i, "), written, buf_size);
+            middleFlush = true;
+            if(written != buf_size){
+                Log.traceln("");
+                Log.warningln("Tried to send %i bytes, but actually sent only %i", buf_size, written);
+                return false;
+            }
             bufPos = 0;
         }
 
         buf[bufPos++] = data[i] ^ mask[maskPtr++ % 4];
     }
+    
 
-    socket_client->write(buf, bufPos);
+    size_t bytesSent = socket_client->write(buf, bufPos);
+    if (middleFlush)
+    {
+        Log.traceln("");
+    }
+    Log.traceln("Finishing message with %i bytes. Sent %i, Success %i", bufPos, bytesSent, bufPos == bytesSent);
+    return bufPos == bytesSent;
+
 }
 
-void WebSocketClient::sendEncodedData(String str, uint8_t opcode)
-{
-    int size = str.length() + 1;
-    char cstr[size];
 
-    str.toCharArray(cstr, size);
-
-    sendEncodedData(cstr, opcode);
-}
-
-void WebSocketClient::sendEncodedDataFast(String str, uint8_t opcode)
-{
-    int size = str.length() + 1;
-    char cstr[size];
-
-    str.toCharArray(cstr, size);
-
-    sendEncodedDataFast(cstr, opcode);
-}

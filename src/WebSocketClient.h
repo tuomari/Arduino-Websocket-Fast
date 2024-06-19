@@ -91,6 +91,10 @@ public:
     WebSocketClient(Client *client, bool socketio = false)
         : socket_client(client), issocketio(socketio) {}
 
+    virtual ~WebSocketClient()
+    {  
+        stop();
+    }
     int connect(const char *host, uint16_t port)
     {
         _host = host;
@@ -117,9 +121,9 @@ public:
     // void getData(const uint8_t * data, size_t maxLength, uint8_t *opcode = NULL);
 
     // Write data to the stream
-    void sendData(const char *str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
-    void sendData(String str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
-    void sendData(const uint8_t *data, const size_t data_length, uint8_t opcode = WS_OPCODE_BINARY, uint16_t msg_cmd = 0xffff);
+    bool sendData(const char *str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
+    bool sendData(String str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
+    bool sendData(const uint8_t *data, const size_t data_length, uint8_t opcode = WS_OPCODE_BINARY, uint16_t msg_cmd = 0xffff);
 
     bool hasReadableBytes() { return socket_client->available() > 0; }
 
@@ -157,11 +161,6 @@ private:
 
     int timedRead();
 
-    void sendEncodedData(char *str, uint8_t opcode);
-    void sendEncodedData(String str, uint8_t opcode);
-
-    void sendEncodedDataFast(char *str, uint8_t opcode);
-    void sendEncodedDataFast(String str, uint8_t opcode);
 };
 
 #endif

@@ -102,8 +102,11 @@ public:
     {
         disconnectStream();
     }
+    void flush()
+    {
+        socket_client->flush();
+    }
 
-    
     // Handle connection requests to validate and process/refuse
     // connections.
     bool handshake(const char* path, const char *additionalHeaders = nullptr, const char* protocol = nullptr);
